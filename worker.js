@@ -316,49 +316,51 @@ export default {
     until,
   },
 
-summary: {
+  summary: {
+    visitors,
+    requests,
+    pageViews: visitors,
+    bandwidth,
+
+    successRate:
+      requests > 0
+        ? (
+            ((statuses["200"] || 0) +
+              (statuses["201"] || 0) +
+              (statuses["202"] || 0) +
+              (statuses["204"] || 0)) /
+            requests
+          ) * 100
+        : 0,
+
+    averageResponse: null,
+  },
+
   visitors,
   requests,
   pageViews: visitors,
   bandwidth,
 
-  // Percentage of requests that returned a 2xx status.
-  successRate:
-    requests > 0
-      ? ((statuses["200"] || 0) +
-          (statuses["201"] || 0) +
-          (statuses["202"] || 0) +
-          (statuses["204"] || 0)) /
-        requests *
-        100
-      : 0,
-
-  averageResponse: null,
-},
-
-  visitors,
-  requests,
-  pageViews: visitors,
-  bandwidth,
-
   averageResponse: null,
 
-  traffic:
-    Object.values(traffic)
-      .sort(
-        (a, b) =>
-          new Date(a.time) -
-          new Date(b.time)
-      ),
+  traffic: Object.values(traffic).sort(
+    (a, b) =>
+      new Date(a.time) -
+      new Date(b.time)
+  ),
 
-  countries:
-    topItems(countries, 10),
+  // Dashboard expects this property.
+  rows: Object.values(traffic).sort(
+    (a, b) =>
+      new Date(a.time) -
+      new Date(b.time)
+  ),
 
-  statuses:
-    topItems(statuses, 10),
+  countries: topItems(countries, 10),
 
-  topPages:
-    topItems(pages, 10),
+  statuses: topItems(statuses, 10),
+
+  topPages: topItems(pages, 10),
 
   popularLinks: [],
 });
