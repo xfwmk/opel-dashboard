@@ -308,43 +308,48 @@ export default {
         }
 
         return json({
-          ok: true,
+  ok: true,
 
-          period: {
-            name: period,
-            since,
-            until,
-          },
+  period: {
+    name: period,
+    since,
+    until,
+  },
 
-          visitors,
+  summary: {
+    visitors,
+    requests,
+    pageViews: visitors,
+    bandwidth,
+    averageResponse: null,
+  },
 
-          requests,
+  visitors,
+  requests,
+  pageViews: visitors,
+  bandwidth,
 
-          pageViews: visitors,
+  averageResponse: null,
 
-          bandwidth,
+  traffic:
+    Object.values(traffic)
+      .sort(
+        (a, b) =>
+          new Date(a.time) -
+          new Date(b.time)
+      ),
 
-          averageResponse: null,
+  countries:
+    topItems(countries, 10),
 
-          traffic:
-            Object.values(traffic)
-              .sort(
-                (a, b) =>
-                  new Date(a.time) -
-                  new Date(b.time)
-              ),
+  statuses:
+    topItems(statuses, 10),
 
-          countries:
-            topItems(countries, 10),
+  topPages:
+    topItems(pages, 10),
 
-          statuses:
-            topItems(statuses, 10),
-
-          topPages:
-            topItems(pages, 10),
-
-          popularLinks: [],
-        });
+  popularLinks: [],
+});
       } catch (error) {
         return json(
           {
