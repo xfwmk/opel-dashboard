@@ -18,21 +18,28 @@ function json(data, status = 200) {
   });
 }
 
-function getPeriod(period) {
+function getPeriod(range) {
   const now = Date.now();
 
-  const hours =
-    period === "30d"
-      ? 30 * 24
-      : period === "7d"
-        ? 7 * 24
-        : 24;
+  let milliseconds;
+
+  switch (range) {
+    case "24h":
+      milliseconds = 24 * 60 * 60 * 1000;
+      break;
+
+    case "30d":
+      milliseconds = 30 * 24 * 60 * 60 * 1000;
+      break;
+
+    case "7d":
+    default:
+      milliseconds = 7 * 24 * 60 * 60 * 1000;
+      break;
+  }
 
   return {
-    since: new Date(
-      now - hours * 60 * 60 * 1000
-    ).toISOString(),
-
+    since: new Date(now - milliseconds).toISOString(),
     until: new Date(now).toISOString(),
   };
 }
@@ -51,6 +58,9 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    /*
+     * CORS
+     */
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -59,7 +69,7 @@ export default {
     }
 
     /*
-     * Worker health check
+     * Health check
      */
     if (url.pathname === "/api/health") {
       return json({
@@ -70,9 +80,18 @@ export default {
     }
 
     /*
-     * Cloudflare Analytics
+     * Analytics endpoint
      */
     if (url.pathname === "/api/analytics") {
+      if (request.method !== "GET") {
+        return json(
+          {
+            error: "Method not allowed",
+          },
+          405
+        );
+      }
+
       if (!env.CLOUDFLARE_API_TOKEN) {
         return json(
           {
@@ -93,14 +112,25 @@ export default {
         );
       }
 
-      const period =
-        url.searchParams.get("period") || "24h";
+      /*
+       * The dashboard sends ?range=24h / 7d / 30d
+       */
+      const range =
+        url.searchParams.get("range") || "7d";
 
       const { since, until } =
-        getPeriod(period);
+        getPeriod(range);
 
+      /*
+       * We use separate GraphQL groups for each
+       * dashboard section.
+       *
+       * This prevents metrics from being accidentally
+       * multiplied by grouping on several dimensions
+       * at the same time.
+       */
       const query = `
-        query Analytics(
+        query DashboardAnalytics(
           $zoneTag: string
           $start: Time
           $end: Time
@@ -111,29 +141,108 @@ export default {
                 zoneTag: $zoneTag
               }
             ) {
-              httpRequestsAdaptiveGroups(
-                limit: 10000
 
-                filter: {
-                  datetime_geq: $start
-                  datetime_lt: $end
-                  requestSource: "eyeball"
-                }
-              ) {
-                count
+              summary:
+                httpRequestsAdaptiveGroups(
+                  limit: 1
+                  filter: {
+                    datetime_geq: $start
+                    datetime_lt: $end
+                    requestSource: "eyeball"
+                  }
+                ) {
+                  count
 
-                sum {
-                  visits
-                  edgeResponseBytes
+                  sum {
+                    visits
+                    edgeResponseBytes
+                  }
                 }
 
-                dimensions {
-                  datetimeHour
-                  clientCountryName
-                  edgeResponseStatus
-                  clientRequestPath
+              traffic:
+                httpRequestsAdaptiveGroups(
+                  limit: 10000
+                  filter: {
+                    datetime_geq: $start
+                    datetime_lt: $end
+                    requestSource: "eyeball"
+                  }
+                  orderBy: [datetimeHour_ASC]
+                ) {
+                  count
+
+                  dimensions {
+                    datetimeHour
+                  }
                 }
-              }
+
+              countries:
+                httpRequestsAdaptiveGroups(
+                  limit: 100
+                  filter: {
+                    datetime_geq: $start
+                    datetime_lt: $end
+                    requestSource: "eyeball"
+                  }
+                  orderBy: [count_DESC]
+                ) {
+                  count
+
+                  dimensions {
+                    clientCountryName
+                  }
+                }
+
+              paths:
+                httpRequestsAdaptiveGroups(
+                  limit: 100
+                  filter: {
+                    datetime_geq: $start
+                    datetime_lt: $end
+                    requestSource: "eyeball"
+                  }
+                  orderBy: [count_DESC]
+                ) {
+                  count
+
+                  dimensions {
+                    clientRequestPath
+                  }
+                }
+
+              devices:
+                httpRequestsAdaptiveGroups(
+                  limit: 100
+                  filter: {
+                    datetime_geq: $start
+                    datetime_lt: $end
+                    requestSource: "eyeball"
+                  }
+                  orderBy: [count_DESC]
+                ) {
+                  count
+
+                  dimensions {
+                    device: clientDeviceType
+                  }
+                }
+
+              statuses:
+                httpRequestsAdaptiveGroups(
+                  limit: 100
+                  filter: {
+                    datetime_geq: $start
+                    datetime_lt: $end
+                    requestSource: "eyeball"
+                  }
+                  orderBy: [count_DESC]
+                ) {
+                  count
+
+                  dimensions {
+                    status: edgeResponseStatus
+                  }
+                }
             }
           }
         }
@@ -173,6 +282,9 @@ export default {
         const body =
           await response.json();
 
+        /*
+         * HTTP/API failure
+         */
         if (!response.ok) {
           return json(
             {
@@ -188,6 +300,9 @@ export default {
           );
         }
 
+        /*
+         * GraphQL failure
+         */
         if (body.errors?.length) {
           return json(
             {
@@ -201,169 +316,224 @@ export default {
           );
         }
 
-        const groups =
-          body?.data?.viewer?.zones?.[0]
-            ?.httpRequestsAdaptiveGroups || [];
+        const zone =
+          body?.data?.viewer?.zones?.[0];
+
+        if (!zone) {
+          return json(
+            {
+              error:
+                "Cloudflare returned no zone data",
+            },
+            502
+          );
+        }
+
+        /*
+         * SUMMARY
+         */
+        const summaryRows =
+          zone.summary || [];
 
         let requests = 0;
-        let visitors = 0;
+        let visits = 0;
         let bandwidth = 0;
 
-        const countries = {};
-        const statuses = {};
-        const pages = {};
-        const traffic = {};
+        for (const row of summaryRows) {
+          requests +=
+            Number(row.count || 0);
 
-        for (const group of groups) {
-          const count =
-            Number(group.count || 0);
+          visits +=
+            Number(row.sum?.visits || 0);
 
-          const visits =
+          bandwidth +=
             Number(
-              group.sum?.visits || 0
-            );
-
-          const bytes =
-            Number(
-              group.sum?.edgeResponseBytes ||
+              row.sum?.edgeResponseBytes ||
                 0
             );
+        }
 
-          requests += count;
-          visitors += visits;
-          bandwidth += bytes;
+        /*
+         * TRAFFIC
+         */
+        const trafficMap = {};
 
-          const dimensions =
-            group.dimensions || {};
+        for (const row of zone.traffic || []) {
+          const time =
+            row.dimensions?.datetimeHour;
 
-          /*
-           * Traffic by hour
-           */
-          if (dimensions.datetimeHour) {
-            const hour =
-              dimensions.datetimeHour;
+          if (!time) continue;
 
-            if (!traffic[hour]) {
-              traffic[hour] = {
-                time: hour,
-                requests: 0,
-                visitors: 0,
-                bytes: 0,
-              };
-            }
+          trafficMap[time] =
+            (trafficMap[time] || 0) +
+            Number(row.count || 0);
+        }
 
-            traffic[hour].requests +=
-              count;
+        const traffic =
+          Object.entries(trafficMap)
+            .sort(
+              (a, b) =>
+                new Date(a[0]) -
+                new Date(b[0])
+            )
+            .map(([time, value]) => ({
+              label: new Date(time)
+                .toLocaleString(
+                  "en-GB",
+                  {
+                    day: "2-digit",
+                    month: "2-digit",
+                    hour: "2-digit",
+                  }
+                ),
 
-            traffic[hour].visitors +=
-              visits;
+              value,
+            }));
 
-            traffic[hour].bytes +=
-              bytes;
+        /*
+         * COUNTRIES
+         */
+        const countriesMap = {};
+
+        for (const row of zone.countries || []) {
+          const country =
+            row.dimensions
+              ?.clientCountryName;
+
+          if (!country) continue;
+
+          countriesMap[country] =
+            (countriesMap[country] || 0) +
+            Number(row.count || 0);
+        }
+
+        const countries =
+          topItems(countriesMap, 10);
+
+        /*
+         * PATHS
+         */
+        const pathsMap = {};
+
+        for (const row of zone.paths || []) {
+          const path =
+            row.dimensions
+              ?.clientRequestPath;
+
+          if (!path) continue;
+
+          pathsMap[path] =
+            (pathsMap[path] || 0) +
+            Number(row.count || 0);
+        }
+
+        const paths =
+          topItems(pathsMap, 10);
+
+        /*
+         * DEVICES
+         */
+        const devicesMap = {};
+
+        for (const row of zone.devices || []) {
+          const device =
+            row.dimensions?.device;
+
+          if (!device) continue;
+
+          devicesMap[device] =
+            (devicesMap[device] || 0) +
+            Number(row.count || 0);
+        }
+
+        const devices =
+          topItems(devicesMap, 10);
+
+        /*
+         * HTTP STATUS
+         */
+        const statusesMap = {};
+
+        for (const row of zone.statuses || []) {
+          const status =
+            row.dimensions?.status;
+
+          if (
+            status === null ||
+            status === undefined
+          ) {
+            continue;
           }
 
-          /*
-           * Countries
-           */
+          const key = String(status);
+
+          statusesMap[key] =
+            (statusesMap[key] || 0) +
+            Number(row.count || 0);
+        }
+
+        const statuses =
+          topItems(statusesMap, 20);
+
+        /*
+         * SUCCESS RATE
+         *
+         * Dashboard describes this as:
+         * 2xx + 3xx responses.
+         */
+        let successful = 0;
+
+        for (const item of statuses) {
+          const status =
+            Number(item.name);
+
           if (
-            dimensions.clientCountryName
+            status >= 200 &&
+            status < 400
           ) {
-            const country =
-              dimensions.clientCountryName;
-
-            countries[country] =
-              (countries[country] || 0) +
-              count;
-          }
-
-          /*
-           * HTTP status codes
-           */
-          if (
-            dimensions.edgeResponseStatus
-          ) {
-            const status =
-              String(
-                dimensions.edgeResponseStatus
-              );
-
-            statuses[status] =
-              (statuses[status] || 0) +
-              count;
-          }
-
-          /*
-           * Pages
-           */
-          if (
-            dimensions.clientRequestPath
-          ) {
-            const path =
-              dimensions.clientRequestPath;
-
-            pages[path] =
-              (pages[path] || 0) +
-              count;
+            successful +=
+              Number(item.value || 0);
           }
         }
 
+        const successRate =
+          requests > 0
+            ? (successful / requests) * 100
+            : 0;
+
+        /*
+         * FINAL RESPONSE
+         *
+         * This shape exactly matches the
+         * dashboard's JavaScript.
+         */
         return json({
-  ok: true,
+          ok: true,
 
-  period: {
-    name: period,
-    since,
-    until,
-  },
+          range,
 
-  summary: {
-    visitors,
-    requests,
-    pageViews: visitors,
-    bandwidth,
+          period: {
+            since,
+            until,
+          },
 
-    successRate:
-      requests > 0
-        ? (
-            ((statuses["200"] || 0) +
-              (statuses["201"] || 0) +
-              (statuses["202"] || 0) +
-              (statuses["204"] || 0)) /
-            requests
-          ) * 100
-        : 0,
+          summary: {
+            requests,
+            visits,
+            bandwidth,
+            successRate,
+          },
 
-    averageResponse: null,
-  },
+          traffic,
 
-  visitors,
-  requests,
-  pageViews: visitors,
-  bandwidth,
+          countries,
 
-  averageResponse: null,
+          paths,
 
-  traffic: Object.values(traffic).sort(
-    (a, b) =>
-      new Date(a.time) -
-      new Date(b.time)
-  ),
+          devices,
 
-  // Dashboard expects this property.
-  rows: Object.values(traffic).sort(
-    (a, b) =>
-      new Date(a.time) -
-      new Date(b.time)
-  ),
-
-  countries: topItems(countries, 10),
-
-  statuses: topItems(statuses, 10),
-
-  topPages: topItems(pages, 10),
-
-  popularLinks: [],
-});
+          statuses,
+        });
       } catch (error) {
         return json(
           {
@@ -381,8 +551,7 @@ export default {
     }
 
     /*
-     * Everything else:
-     * serve public/
+     * Everything else is served from /public
      */
     return env.ASSETS.fetch(request);
   },
