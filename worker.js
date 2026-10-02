@@ -1,4 +1,5 @@
-const GRAPHQL_ENDPOINT = "https://api.cloudflare.com/client/v4/graphql";
+const GRAPHQL_ENDPOINT =
+  "https://api.cloudflare.com/client/v4/graphql";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,22 +21,18 @@ function json(data, status = 200) {
 function getPeriod(period) {
   const now = Date.now();
 
-  if (period === "7d") {
-    return {
-      since: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      until: new Date(now).toISOString(),
-    };
-  }
-
-  if (period === "30d") {
-    return {
-      since: new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      until: new Date(now).toISOString(),
-    };
-  }
+  const hours =
+    period === "30d"
+      ? 30 * 24
+      : period === "7d"
+        ? 7 * 24
+        : 24;
 
   return {
-    since: new Date(now - 24 * 60 * 60 * 1000).toISOString(),
+    since: new Date(
+      now - hours * 60 * 60 * 1000
+    ).toISOString(),
+
     until: new Date(now).toISOString(),
   };
 }
@@ -61,6 +58,9 @@ export default {
       });
     }
 
+    /*
+     * Worker health check
+     */
     if (url.pathname === "/api/health") {
       return json({
         ok: true,
@@ -69,15 +69,15 @@ export default {
       });
     }
 
+    /*
+     * Cloudflare Analytics
+     */
     if (url.pathname === "/api/analytics") {
-      if (request.method !== "GET") {
-        return json({ error: "Method not allowed" }, 405);
-      }
-
       if (!env.CLOUDFLARE_API_TOKEN) {
         return json(
           {
-            error: "CLOUDFLARE_API_TOKEN is not configured",
+            error:
+              "CLOUDFLARE_API_TOKEN is not configured",
           },
           500
         );
@@ -86,14 +86,18 @@ export default {
       if (!env.CLOUDFLARE_ZONE_ID) {
         return json(
           {
-            error: "CLOUDFLARE_ZONE_ID is not configured",
+            error:
+              "CLOUDFLARE_ZONE_ID is not configured",
           },
           500
         );
       }
 
-      const period = url.searchParams.get("period") || "24h";
-      const { since, until } = getPeriod(period);
+      const period =
+        url.searchParams.get("period") || "24h";
+
+      const { since, until } =
+        getPeriod(period);
 
       const query = `
         query Analytics(
@@ -102,41 +106,32 @@ export default {
           $end: Time
         ) {
           viewer {
-            zones(filter: { zoneTag: $zoneTag }) {
-              httpRequests1hGroups(
+            zones(
+              filter: {
+                zoneTag: $zoneTag
+              }
+            ) {
+              httpRequestsAdaptiveGroups(
                 limit: 10000
+
                 filter: {
                   datetime_geq: $start
                   datetime_lt: $end
+                  requestSource: "eyeball"
                 }
               ) {
-                dimensions {
-                  datetimeHour
-                }
+                count
 
                 sum {
-                  requests
-                  bytes
-                  pageViews
-
-                  countryMap {
-                    requests
-                    clientCountryName
-                  }
-
-                  responseStatusMap {
-                    requests
-                    edgeResponseStatus
-                  }
-
-                  browserMap {
-                    requests
-                    uaBrowserFamily
-                  }
+                  visits
+                  edgeResponseBytes
                 }
 
-                uniq {
-                  uniques
+                dimensions {
+                  datetimeHour
+                  clientCountryName
+                  edgeResponseStatus
+                  clientRequestPath
                 }
               }
             }
@@ -145,32 +140,48 @@ export default {
       `;
 
       try {
-        const response = await fetch(GRAPHQL_ENDPOINT, {
-          method: "POST",
+        const response = await fetch(
+          GRAPHQL_ENDPOINT,
+          {
+            method: "POST",
 
-          headers: {
-            Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
-            "Content-Type": "application/json",
-          },
+            headers: {
+              Authorization:
+                `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
 
-          body: JSON.stringify({
-            query,
+              "Content-Type":
+                "application/json",
 
-            variables: {
-              zoneTag: env.CLOUDFLARE_ZONE_ID,
-              start: since,
-              end: until,
+              Accept:
+                "application/json",
             },
-          }),
-        });
 
-        const body = await response.json();
+            body: JSON.stringify({
+              query,
+
+              variables: {
+                zoneTag:
+                  env.CLOUDFLARE_ZONE_ID,
+
+                start: since,
+                end: until,
+              },
+            }),
+          }
+        );
+
+        const body =
+          await response.json();
 
         if (!response.ok) {
           return json(
             {
-              error: "Cloudflare Analytics request failed",
-              status: response.status,
+              error:
+                "Cloudflare Analytics request failed",
+
+              status:
+                response.status,
+
               details: body,
             },
             502
@@ -180,75 +191,119 @@ export default {
         if (body.errors?.length) {
           return json(
             {
-              error: "Cloudflare GraphQL returned an error",
-              details: body.errors,
+              error:
+                "Cloudflare GraphQL returned an error",
+
+              details:
+                body.errors,
             },
             502
           );
         }
 
         const groups =
-          body?.data?.viewer?.zones?.[0]?.httpRequests1hGroups || [];
+          body?.data?.viewer?.zones?.[0]
+            ?.httpRequestsAdaptiveGroups || [];
 
-        let visitors = 0;
-        let pageViews = 0;
         let requests = 0;
+        let visitors = 0;
         let bandwidth = 0;
 
         const countries = {};
         const statuses = {};
-        const browsers = {};
-
-        const traffic = [];
+        const pages = {};
+        const traffic = {};
 
         for (const group of groups) {
-          const sum = group.sum || {};
-          const uniq = group.uniq || {};
+          const count =
+            Number(group.count || 0);
 
-          const groupRequests = Number(sum.requests || 0);
-          const groupBytes = Number(sum.bytes || 0);
-          const groupPageViews = Number(sum.pageViews || 0);
-          const groupVisitors = Number(uniq.uniques || 0);
+          const visits =
+            Number(
+              group.sum?.visits || 0
+            );
 
-          requests += groupRequests;
-          bandwidth += groupBytes;
-          pageViews += groupPageViews;
-          visitors += groupVisitors;
+          const bytes =
+            Number(
+              group.sum?.edgeResponseBytes ||
+                0
+            );
 
-          traffic.push({
-            time: group?.dimensions?.datetimeHour || null,
-            requests: groupRequests,
-            pageViews: groupPageViews,
-            visitors: groupVisitors,
-            bytes: groupBytes,
-          });
+          requests += count;
+          visitors += visits;
+          bandwidth += bytes;
 
-          for (const country of sum.countryMap || []) {
-            const name = country.clientCountryName;
+          const dimensions =
+            group.dimensions || {};
 
-            if (!name) continue;
+          /*
+           * Traffic by hour
+           */
+          if (dimensions.datetimeHour) {
+            const hour =
+              dimensions.datetimeHour;
 
-            countries[name] =
-              (countries[name] || 0) +
-              Number(country.requests || 0);
+            if (!traffic[hour]) {
+              traffic[hour] = {
+                time: hour,
+                requests: 0,
+                visitors: 0,
+                bytes: 0,
+              };
+            }
+
+            traffic[hour].requests +=
+              count;
+
+            traffic[hour].visitors +=
+              visits;
+
+            traffic[hour].bytes +=
+              bytes;
           }
 
-          for (const status of sum.responseStatusMap || []) {
-            const code = String(status.edgeResponseStatus);
+          /*
+           * Countries
+           */
+          if (
+            dimensions.clientCountryName
+          ) {
+            const country =
+              dimensions.clientCountryName;
 
-            statuses[code] =
-              (statuses[code] || 0) +
-              Number(status.requests || 0);
+            countries[country] =
+              (countries[country] || 0) +
+              count;
           }
 
-          for (const browser of sum.browserMap || []) {
-            const name = browser.uaBrowserFamily;
+          /*
+           * HTTP status codes
+           */
+          if (
+            dimensions.edgeResponseStatus
+          ) {
+            const status =
+              String(
+                dimensions.edgeResponseStatus
+              );
 
-            if (!name) continue;
+            statuses[status] =
+              (statuses[status] || 0) +
+              count;
+          }
 
-            browsers[name] =
-              (browsers[name] || 0) +
-              Number(browser.requests || 0);
+          /*
+           * Pages
+           */
+          if (
+            dimensions.clientRequestPath
+          ) {
+            const path =
+              dimensions.clientRequestPath;
+
+            pages[path] =
+              (pages[path] || 0) +
+              count;
           }
         }
 
@@ -262,28 +317,40 @@ export default {
           },
 
           visitors,
-          pageViews,
+
           requests,
+
+          pageViews: visitors,
+
           bandwidth,
 
           averageResponse: null,
 
-          traffic,
+          traffic:
+            Object.values(traffic)
+              .sort(
+                (a, b) =>
+                  new Date(a.time) -
+                  new Date(b.time)
+              ),
 
-          countries: topItems(countries, 10),
+          countries:
+            topItems(countries, 10),
 
-          browsers: topItems(browsers, 10),
+          statuses:
+            topItems(statuses, 10),
 
-          statuses: topItems(statuses, 10),
-
-          topPages: [],
+          topPages:
+            topItems(pages, 10),
 
           popularLinks: [],
         });
       } catch (error) {
         return json(
           {
-            error: "Failed to contact Cloudflare Analytics",
+            error:
+              "Failed to contact Cloudflare Analytics",
+
             details:
               error instanceof Error
                 ? error.message
@@ -294,6 +361,10 @@ export default {
       }
     }
 
+    /*
+     * Everything else:
+     * serve public/
+     */
     return env.ASSETS.fetch(request);
   },
 };
