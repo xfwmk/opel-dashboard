@@ -316,13 +316,25 @@ export default {
     until,
   },
 
-  summary: {
-    visitors,
-    requests,
-    pageViews: visitors,
-    bandwidth,
-    averageResponse: null,
-  },
+summary: {
+  visitors,
+  requests,
+  pageViews: visitors,
+  bandwidth,
+
+  // Percentage of requests that returned a 2xx status.
+  successRate:
+    requests > 0
+      ? ((statuses["200"] || 0) +
+          (statuses["201"] || 0) +
+          (statuses["202"] || 0) +
+          (statuses["204"] || 0)) /
+        requests *
+        100
+      : 0,
+
+  averageResponse: null,
+},
 
   visitors,
   requests,
