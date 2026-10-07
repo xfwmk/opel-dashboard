@@ -37,30 +37,30 @@ header{display:flex;align-items:center;justify-content:space-between;gap:20px;ma
 <header>
   <div class="brand"><div class="logo">𖦏</div><div><div class="kicker">opel.org.uk</div><div class="title">Dashboard</div></div></div>
   <div class="actions">
-    <div class="status" id="apiStatus"><i></i><span id="apiStatusText">Connecting</span></div>
-    <select class="control" id="range" aria-label="Time period"><option value="24h">Last 24 hours</option><option value="7d" selected>Last 7 days</option><option value="30d">Last 30 days</option></select>
-    <button class="control" id="refresh">↻ Refresh</button>
+    <div class="status" id="apiStatus"><i></i><span id="apiStatusText">Коннектинг</span></div>
+    <select class="control" id="range" aria-label="Time period"><option value="24ч">Last 24 hours</option><option value="7d" selected>Last 7 days</option><option value="30d">Last 30 days</option></select>
+    <button class="control" id="refresh">↻ Рефреш</button>
   </div>
 </header>
 
 <div class="error" id="error"></div>
 
-<section class="stats">
-  <article class="card stat"><span class="label">Requests</span><strong class="big" id="requests">—</strong><span class="sub">Cloudflare edge requests</span></article>
-  <article class="card stat"><span class="label">Visits</span><strong class="big" id="visits">—</strong><span class="sub">Cloudflare visits</span></article>
-  <article class="card stat"><span class="label">Bandwidth</span><strong class="big" id="bandwidth">—</strong><span class="sub">edge response bytes</span></article>
-  <article class="card stat"><span class="label">Success rate</span><strong class="big" id="success">—</strong><span class="sub">2xx + 3xx responses</span></article>
+<section class="статы">
+  <article class="card stat"><span class="label">Рекуести</span><strong class="big" id="requests">—</strong><span class="sub">Cloudflare edge requests</span></article>
+  <article class="card stat"><span class="label">Висити</span><strong class="big" id="visits">—</strong><span class="sub">Cloudflare visits</span></article>
+  <article class="card stat"><span class="label">Бандуидф</span><strong class="big" id="bandwidth">—</strong><span class="sub">edge response bytes</span></article>
+  <article class="card stat"><span class="label">Суксесс райт</span><strong class="big" id="success">—</strong><span class="sub">2xx + 3xx responses</span></article>
 </section>
 
 <section class="grid wide">
-<article class="card"><div class="head"><div><h2>Traffic</h2><p>Requests over the selected period</p></div><span class="range">Cloudflare GraphQL</span></div><div class="chart" id="trafficChart"><div class="empty">Loading…</div></div></article>
-<article class="card"><div class="head"><div><h2>Top countries</h2><p>Visits by visitor country</p></div></div><div class="rows" id="countries"></div></article>
+<article class="card"><div class="head"><div><h2>Траффик</h2><p>Рекуести овер зе селектед период</p></div><span class="range">Cloudflare GraphQL</span></div><div class="chart" id="trafficChart"><div class="empty">Loading…</div></div></article>
+<article class="card"><div class="head"><div><h2>Top countries</h2><p>Виситс бай виситор каунтрий</p></div></div><div class="rows" id="countries"></div></article>
 </section>
 
 <section class="grid three">
-<article class="card"><div class="head"><div><h2>Top paths</h2><p>Requests by URL path</p></div></div><div class="list" id="paths"></div></article>
-<article class="card"><div class="head"><div><h2>Devices</h2><p>Visits by device type</p></div></div><div class="rows" id="devices"></div></article>
-<article class="card"><div class="head"><div><h2>HTTP status</h2><p>Request distribution</p></div></div><div class="rows" id="statuses"></div></article>
+<article class="card"><div class="head"><div><h2>Топ пафс</h2><p>Рекуестс бай УРЛ пафс</p></div></div><div class="list" id="paths"></div></article>
+<article class="card"><div class="head"><div><h2>Девайсес</h2><p>Висити бай девайс тайп</p></div></div><div class="rows" id="devices"></div></article>
+<article class="card"><div class="head"><div><h2>HTTP status</h2><p>Рекуест дистрибуци </p></div></div><div class="rows" id="statuses"></div></article>
 </section>
 
 <section class="grid wide">
