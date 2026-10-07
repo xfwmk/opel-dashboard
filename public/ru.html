@@ -35,10 +35,10 @@ header{display:flex;align-items:center;justify-content:space-between;gap:20px;ma
 <body>
 <div class="page">
 <header>
-  <div class="brand"><div class="logo">𖦏</div><div><div class="kicker">opel.org.uk</div><div class="title">Dashboard</div></div></div>
+  <div class="brand"><div class="logo">𖦏</div><div><div class="kicker">opel.org.uk</div><div class="title">Дашборд</div></div></div>
   <div class="actions">
     <div class="status" id="apiStatus"><i></i><span id="apiStatusText">Коннектинг</span></div>
-    <select class="control" id="range" aria-label="Time period"><option value="24ч">Last 24 hours</option><option value="7d" selected>Last 7 days</option><option value="30d">Last 30 days</option></select>
+    <select class="control" id="range" aria-label="Time period"><option value="24ч">Последние 24 часов</option><option value="7d" selected>Последние 7 дней</option><option value="30d">Последние 30 дней</option></select>
     <button class="control" id="refresh">↻ Рефреш</button>
   </div>
 </header>
@@ -46,10 +46,10 @@ header{display:flex;align-items:center;justify-content:space-between;gap:20px;ma
 <div class="error" id="error"></div>
 
 <section class="статы">
-  <article class="card stat"><span class="label">Рекуести</span><strong class="big" id="requests">—</strong><span class="sub">Cloudflare edge requests</span></article>
-  <article class="card stat"><span class="label">Висити</span><strong class="big" id="visits">—</strong><span class="sub">Cloudflare visits</span></article>
-  <article class="card stat"><span class="label">Бандуидф</span><strong class="big" id="bandwidth">—</strong><span class="sub">edge response bytes</span></article>
-  <article class="card stat"><span class="label">Суксесс райт</span><strong class="big" id="success">—</strong><span class="sub">2xx + 3xx responses</span></article>
+  <article class="card stat"><span class="label">Рекуести</span><strong class="big" id="requests">—</strong><span class="sub">Запросы Cloudflare на границе сети</span></article>
+  <article class="card stat"><span class="label">Висити</span><strong class="big" id="visits">—</strong><span class="sub">Посещения Cloudflare</span></article>
+  <article class="card stat"><span class="label">Бандуидф</span><strong class="big" id="bandwidth">—</strong><span class="sub">байты ответа фронта</span></article>
+  <article class="card stat"><span class="label">Суксесс райт</span><strong class="big" id="success">—</strong><span class="sub">2xx + 3xx ответов</span></article>
 </section>
 
 <section class="grid wide">
@@ -64,11 +64,11 @@ header{display:flex;align-items:center;justify-content:space-between;gap:20px;ma
 </section>
 
 <section class="grid wide">
-<article class="card"><div class="head"><div><h2>Popular links</h2><p>External clicks from your profile</p></div></div><div class="empty"><div><strong>Click tracking is separate</strong>Cloudflare HTTP analytics does not identify individual UI clicks such as Steam, GitHub, FACEIT or TikTok. This panel is left ready for event tracking.</div></div></article>
-<article class="card"><div class="head"><div><h2>Live overview</h2><p>Calculated from HTTP status data</p></div></div><div class="rows" id="overview"></div></article>
+<article class="card"><div class="head"><div><h2>Популярные ссылки</h2><p>Внешние клики из вашего профиля</p></div></div><div class="empty"><div><strong>Отслеживание кликов осуществляется отдельно.</strong></div>Аналитика HTTP от Cloudflare не отслеживает отдельные клики по элементам пользовательского интерфейса, таким как Steam, GitHub, FACEIT или TikTok. Эта панель остается готовой для отслеживания событий.</div></article>
+<article class="card"><div class="head"><div><h2>Обзор в реальном времени</h2><p>Рассчитано на основе данных о состоянии HTTP</p></div></div><div class="rows" id="overview"></div></article>
 </section>
 
-<footer><span>опель / приват дашборд</span><span id="updated">Not loaded yet</span></footer>
+<footer><span>опель / приват дашборд</span><span id="updated">Пока не загружено</span></footer>
 </div>
 
 <script>
