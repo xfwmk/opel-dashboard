@@ -10,5 +10,9 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS"
+  },
+
+  "vars": {
+    "CLOUDFLARE_ZONE_ID": "b8acb4f1d6332eb79000c553c6be6162"
   }
 }
