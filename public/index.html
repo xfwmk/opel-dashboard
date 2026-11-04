@@ -80,7 +80,7 @@ function renderOverview(statuses){
  const totals={"2xx":0,"3xx":0,"4xx":0,"5xx":0};statuses.forEach(s=>{const n=Number(s.name);if(n>=200&&n<300)totals["2xx"]+=Number(s.value)||0;else if(n>=300&&n<400)totals["3xx"]+=Number(s.value)||0;else if(n>=400&&n<500)totals["4xx"]+=Number(s.value)||0;else if(n>=500&&n<600)totals["5xx"]+=Number(s.value)||0;});const total=Object.values(totals).reduce((a,b)=>a+b,0);const rows=Object.entries(totals).map(([name,value])=>({name,value,pct:total?(value/total*100):0}));const max=Math.max(...rows.map(x=>x.value),1);$("overview").innerHTML=rows.map(x=>`<div class="row"><span class="name">${x.name}</span><span class="track"><span class="fill" style="width:${Math.max(x.value?2:0,(x.value/max)*100)}%"></span></span><span class="num">${x.pct.toFixed(1)}%</span></div>`).join("");}
 
 
-const PAGES=[['overview','Overview'],['traffic','Traffic'],['visitors','Visitors'],['security','Security'],['health','Health'],['reports','Reports'],['settings','Settings']];
+const PAGES=[['overview','Overview'],['traffic','Traffic'],['visitors','Visitors'],['security','Security'],['reports','Reports']];
 const state={data:null,range:localStorage.getItem('opel-range')||'7d',metric:'requests',loading:false,lastUpdated:null,health:[],healthBusy:false,compare:false,autoRefresh:false};
 function setStatus(ok,text){$('statusDot').classList.toggle('error',!ok);$('apiStatusText').textContent=text}
 function showError(msg){$('error').textContent=msg;$('error').classList.add('show')}
